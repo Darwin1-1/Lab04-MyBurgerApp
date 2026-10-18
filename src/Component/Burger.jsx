@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./Burger.css";
 
 const burgers = [
@@ -65,13 +65,8 @@ function renderStars(rating) {
 function BurgerApp() {
   const [wishlist, setWishlist] = useState(new Set());
   const [quantities, setQuantities] = useState({});
-
-  const updateQuantity = (id, change) => {
-    setQuantities((current) => {
-      const nextQuantity = Math.max(0, (current[id] ?? 0) + change);
-      return { ...current, [id]: nextQuantity };
-    });
-  };
+  const [selectedBurger, setSelectedBurger] = useState(null);
+  const [modalQuantity, setModalQuantity] = useState(1);
 
   const toggleWishlist = (id) => {
     setWishlist((current) => {
@@ -83,6 +78,32 @@ function BurgerApp() {
       }
       return next;
     });
+  };
+
+  const openBurger = (burger) => {
+    setSelectedBurger(burger);
+    setModalQuantity(1);
+  };
+
+  const closeBurger = () => setSelectedBurger(null);
+
+  useEffect(() => {
+    if (!selectedBurger) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setSelectedBurger(null);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedBurger]);
+
+  const addToCart = () => {
+    setQuantities((current) => ({
+      ...current,
+      [selectedBurger.id]: (current[selectedBurger.id] ?? 0) + modalQuantity,
+    }));
+    closeBurger();
   };
 
   const cartCount = Object.values(quantities).reduce(
@@ -131,11 +152,24 @@ function BurgerApp() {
 
         <section className="burger-grid" aria-label="Burger menu">
           {burgers.map((burger) => {
-            const quantity = quantities[burger.id] ?? 0;
             const isWishlisted = wishlist.has(burger.id);
 
             return (
-              <article className="burger-card" key={burger.id}>
+              <article
+                className="burger-card"
+                key={burger.id}
+                onClick={() => openBurger(burger)}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openBurger(burger);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`View ${burger.name} details`}
+              >
                 <div className="card-image-container">
                   <img
                     src={burger.image}
@@ -154,7 +188,10 @@ function BurgerApp() {
                     </div>
                     <button
                       className={`wishlist-btn ${isWishlisted ? "active" : ""}`}
-                      onClick={() => toggleWishlist(burger.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleWishlist(burger.id);
+                      }}
                       aria-label={`${isWishlisted ? "Remove" : "Add"} ${burger.name} ${isWishlisted ? "from" : "to"} wishlist`}
                       aria-pressed={isWishlisted}
                     >
@@ -167,29 +204,7 @@ function BurgerApp() {
                     <span className="price">
                       {currency.format(burger.price)}
                     </span>
-                    <div
-                      className="quantity-control"
-                      aria-label={`Quantity for ${burger.name}`}
-                    >
-                      <button
-                        className="quantity-btn"
-                        onClick={() => updateQuantity(burger.id, -1)}
-                        disabled={quantity === 0}
-                        aria-label={`Remove one ${burger.name}`}
-                      >
-                        −
-                      </button>
-                      <span className="quantity" aria-live="polite">
-                        {quantity}
-                      </span>
-                      <button
-                        className="quantity-btn plus"
-                        onClick={() => updateQuantity(burger.id, 1)}
-                        aria-label={`Add one ${burger.name}`}
-                      >
-                        +
-                      </button>
-                    </div>
+                    <span className="view-details">View details</span>
                   </div>
                 </div>
               </article>
@@ -197,6 +212,78 @@ function BurgerApp() {
           })}
         </section>
       </main>
+
+      {selectedBurger && (
+        <div
+          className="modal-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeBurger();
+          }}
+        >
+          <section
+            className="burger-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-burger-name"
+          >
+            <button
+              className="modal-close"
+              type="button"
+              onClick={closeBurger}
+              aria-label="Close burger details"
+            >
+              ×
+            </button>
+            <img
+              className="modal-image"
+              src={selectedBurger.image}
+              alt={selectedBurger.name}
+            />
+            <div className="modal-content">
+              <p className="eyebrow">Made fresh to order</p>
+              <h2 id="modal-burger-name">{selectedBurger.name}</h2>
+              <p className="modal-description">{selectedBurger.description}</p>
+              <div className="modal-order-row">
+                <span className="price">
+                  {currency.format(selectedBurger.price)}
+                </span>
+                <div className="quantity-control" aria-label="Select quantity">
+                  <button
+                    className="quantity-btn"
+                    type="button"
+                    onClick={() =>
+                      setModalQuantity((quantity) => Math.max(1, quantity - 1))
+                    }
+                    disabled={modalQuantity === 1}
+                    aria-label="Decrease quantity"
+                  >
+                    −
+                  </button>
+                  <span className="quantity" aria-live="polite">
+                    {modalQuantity}
+                  </span>
+                  <button
+                    className="quantity-btn plus"
+                    type="button"
+                    onClick={() => setModalQuantity((quantity) => quantity + 1)}
+                    aria-label="Increase quantity"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <button
+                className="add-to-cart-btn"
+                type="button"
+                onClick={addToCart}
+              >
+                Add to cart ·{" "}
+                {currency.format(selectedBurger.price * modalQuantity)}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
